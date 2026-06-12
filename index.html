@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiteGrade — Free Website SEO Report Card</title>
+<meta name="description" content="Enter your website address and get a free graded SEO inspection report in seconds. See exactly what's helping and hurting your Google ranking.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#122033;
+    --paper:#FBFBF9;
+    --line:#D9DDD4;
+    --muted:#5B6B7C;
+    --stamp:#C0331B;
+    --pass:#1E7F4F;
+    --warn:#A8730F;
+    --fail:#C0331B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Archivo',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace}
+
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:18px 24px;border-bottom:2px solid var(--ink);
+  }
+  .topbar .brand{font-weight:800;font-size:18px;letter-spacing:-0.02em}
+  .topbar .brand span{color:var(--stamp)}
+  .topbar .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em}
+
+  .hero{max-width:760px;margin:0 auto;padding:72px 24px 48px;text-align:center}
+  .hero h1{font-size:clamp(32px,5.5vw,52px);font-weight:800;letter-spacing:-0.03em;line-height:1.08}
+  .hero h1 em{font-style:normal;color:var(--stamp)}
+  .hero p{margin-top:16px;font-size:17px;color:var(--muted);max-width:520px;margin-left:auto;margin-right:auto}
+
+  .scanrow{
+    display:flex;gap:0;max-width:560px;margin:36px auto 0;
+    border:2px solid var(--ink);background:#fff;
+  }
+  .scanrow input{
+    flex:1;border:none;outline:none;padding:16px 18px;
+    font-family:'IBM Plex Mono',monospace;font-size:15px;color:var(--ink);
+    background:transparent;min-width:0;
+  }
+  .scanrow input::placeholder{color:#A8B0BA}
+  .scanrow button{
+    border:none;background:var(--ink);color:#fff;
+    font-family:'Archivo',sans-serif;font-weight:700;font-size:15px;
+    padding:0 26px;cursor:pointer;white-space:nowrap;
+  }
+  .scanrow button:hover{background:#1d3450}
+  .scanrow button:focus-visible,.scanrow input:focus-visible{outline:3px solid var(--stamp);outline-offset:-3px}
+  .scanrow button:disabled{background:#8a94a0;cursor:wait}
+  .hint{margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
+
+  .status{max-width:560px;margin:20px auto 0;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);min-height:20px}
+  .status.error{color:var(--fail)}
+
+  /* ---------- REPORT ---------- */
+  .report{max-width:820px;margin:24px auto 80px;padding:0 24px;display:none}
+  .sheet{background:#fff;border:2px solid var(--ink)}
+
+  .sheet-head{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+    padding:24px 28px;border-bottom:2px solid var(--ink);position:relative;
+  }
+  .sheet-head .meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
+  .sheet-head .meta strong{display:block;font-size:15px;color:var(--ink);font-weight:600;word-break:break-all;margin-bottom:6px}
+  .sheet-head .label{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:4px}
+
+  .stamp{
+    flex-shrink:0;width:96px;height:96px;border:4px double var(--stamp);
+    border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:var(--stamp);transform:rotate(-6deg);
+    font-weight:800;
+  }
+  .stamp .g{font-size:46px;line-height:1;letter-spacing:-0.02em}
+  .stamp .s{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:0.06em}
+  @keyframes stampIn{0%{transform:rotate(-6deg) scale(2.4);opacity:0}70%{transform:rotate(-6deg) scale(0.94);opacity:1}100%{transform:rotate(-6deg) scale(1)}}
+  .stamp.animate{animation:stampIn .45s cubic-bezier(.2,.8,.3,1) both}
+  @media (prefers-reduced-motion: reduce){.stamp.animate{animation:none}}
+
+  .summary-strip{
+    display:flex;border-bottom:2px solid var(--ink);
+  }
+  .summary-strip .cell{
+    flex:1;padding:14px 18px;text-align:center;
+    border-right:1px solid var(--line);
+  }
+  .summary-strip .cell:last-child{border-right:none}
+  .summary-strip .n{font-weight:800;font-size:24px}
+  .summary-strip .n.pass{color:var(--pass)}
+  .summary-strip .n.warn{color:var(--warn)}
+  .summary-strip .n.fail{color:var(--fail)}
+  .summary-strip .l{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)}
+
+  .cat{padding:0 28px}
+  .cat h2{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+    text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);
+    padding:22px 0 4px;
+  }
+  .check{
+    display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);
+  }
+  .cat:last-of-type .check:last-child{border-bottom:none}
+  .dot{flex-shrink:0;width:14px;height:14px;border-radius:50%;margin-top:5px}
+  .dot.pass{background:var(--pass)}
+  .dot.warn{background:var(--warn)}
+  .dot.fail{background:var(--fail)}
+  .check .body{flex:1}
+  .check .name{font-weight:700;font-size:15px}
+  .check .detail{font-size:14px;color:var(--muted);margin-top:2px}
+  .check .fix{
+    margin-top:8px;font-size:13.5px;padding:8px 12px;
+    background:#FDF4F0;border-left:3px solid var(--stamp);
+  }
+  .check .fix b{font-weight:700}
+
+  .speedwrap{padding:0 28px 28px}
+  .speed{
+    margin-top:22px;border:1px dashed var(--line);padding:16px 18px;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);
+  }
+  .speed strong{color:var(--ink);font-weight:600}
+  .speed .score-pill{display:inline-block;font-weight:600;padding:2px 10px;border-radius:99px;color:#fff;margin-left:6px}
+
+  .actions{display:flex;gap:12px;justify-content:center;margin-top:24px}
+  .actions button{
+    font-family:'Archivo',sans-serif;font-weight:700;font-size:14px;
+    padding:12px 22px;cursor:pointer;border:2px solid var(--ink);background:#fff;color:var(--ink);
+  }
+  .actions button.primary{background:var(--ink);color:#fff}
+  .actions button:hover{background:#EFF1EC}
+  .actions button.primary:hover{background:#1d3450}
+  .actions button:focus-visible{outline:3px solid var(--stamp);outline-offset:2px}
+
+  footer{
+    text-align:center;padding:32px 24px 48px;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
+  }
+
+  @media (max-width:600px){
+    .sheet-head{flex-direction:column-reverse;align-items:center;text-align:center}
+    .summary-strip{flex-wrap:wrap}
+    .summary-strip .cell{min-width:50%}
+  }
+
+  /* ---------- PRINT (Save as PDF) ---------- */
+  @media print{
+    .topbar,.hero,.actions,.status,footer{display:none!important}
+    .report{display:block!important;margin:0;padding:0;max-width:none}
+    .sheet{border-width:1px}
+    body{background:#fff}
+    .check{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Site<span>Grade</span></div>
+  <div class="tag">Website inspection reports</div>
+</div>
+
+<section class="hero">
+  <h1>Get your website's <em>report card.</em></h1>
+  <p>Enter your address below. We scan your site the way Google sees it and grade what's helping — and hurting — your ranking. Free, no signup.</p>
+  <div class="scanrow">
+    <input id="url" type="text" placeholder="yourbusiness.com" autocomplete="off" spellcheck="false" aria-label="Website address">
+    <button id="go">Run inspection</button>
+  </div>
+  <div class="hint">Takes about 10 seconds. No account needed.</div>
+  <div class="status" id="status" role="status"></div>
+</section>
+
+<section class="report" id="report" aria-live="polite">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="meta">
+        <div class="label">Inspection report</div>
+        <strong id="r-url"></strong>
+        <span id="r-date"></span> · server responded in <span id="r-ms"></span> ms
+      </div>
+      <div class="stamp" id="stamp">
+        <div class="g" id="r-grade"></div>
+        <div class="s"><span id="r-score"></span>/100</div>
+      </div>
+    </div>
+    <div class="summary-strip" id="summary"></div>
+    <div id="cats"></div>
+    <div class="speedwrap">
+      <div class="speed" id="speed">Checking Google mobile speed score… (can take up to 30 seconds)</div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="primary" onclick="window.print()">Save report as PDF</button>
+    <button id="again">Scan another site</button>
+  </div>
+</section>
+
+<footer>SiteGrade · Built in Springfield, MO</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const input = $("url"), btn = $("go"), statusEl = $("status"), report = $("report");
+
+const CATEGORY_ORDER = ["Essentials", "Content", "Social", "Technical"];
+
+async function runAudit() {
+  const url = input.value.trim();
+  if (!url) { input.focus(); return; }
+
+  btn.disabled = true;
+  btn.textContent = "Scanning…";
+  statusEl.className = "status";
+  statusEl.textContent = "Fetching your site and running 16 checks…";
+  report.style.display = "none";
+
+  try {
+    const res = await fetch("/.netlify/functions/audit?url=" + encodeURIComponent(url));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Scan failed.");
+    render(data);
+    statusEl.textContent = "";
+    runPageSpeed(data.url);
+  } catch (e) {
+    statusEl.className = "status error";
+    statusEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Run inspection";
+  }
+}
+
+function render(data) {
+  $("r-url").textContent = data.url;
+  $("r-date").textContent = new Date(data.scannedAt).toLocaleDateString(undefined, { year:"numeric", month:"long", day:"numeric" });
+  $("r-ms").textContent = data.responseMs;
+  $("r-grade").textContent = data.grade;
+  $("r-score").textContent = data.score;
+
+  const counts = { pass:0, warn:0, fail:0 };
+  data.checks.forEach(c => counts[c.status]++);
+  $("summary").innerHTML = `
+    <div class="cell"><div class="n pass">${counts.pass}</div><div class="l">Passing</div></div>
+    <div class="cell"><div class="n warn">${counts.warn}</div><div class="l">Needs work</div></div>
+    <div class="cell"><div class="n fail">${counts.fail}</div><div class="l">Failing</div></div>
+    <div class="cell"><div class="n">${data.checks.length}</div><div class="l">Checks run</div></div>`;
+
+  const cats = $("cats");
+  cats.innerHTML = "";
+  for (const cat of CATEGORY_ORDER) {
+    const items = data.checks.filter(c => c.category === cat);
+    if (!items.length) continue;
+    const sec = document.createElement("div");
+    sec.className = "cat";
+    sec.innerHTML = `<h2>${cat}</h2>` + items.map(c => `
+      <div class="check">
+        <div class="dot ${c.status}"></div>
+        <div class="body">
+          <div class="name">${c.label}</div>
+          <div class="detail">${escapeHtml(c.detail)}</div>
+          ${c.fix ? `<div class="fix"><b>How to fix:</b> ${escapeHtml(c.fix)}</div>` : ""}
+        </div>
+      </div>`).join("");
+    cats.appendChild(sec);
+  }
+
+  report.style.display = "block";
+  const stamp = $("stamp");
+  stamp.classList.remove("animate");
+  void stamp.offsetWidth; // restart animation
+  stamp.classList.add("animate");
+  report.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function runPageSpeed(url) {
+  const el = $("speed");
+  el.textContent = "Checking Google mobile speed score… (can take up to 30 seconds)";
+  try {
+    const r = await fetch("https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=" + encodeURIComponent(url) + "&strategy=mobile&category=performance");
+    const d = await r.json();
+    const score = Math.round((d.lighthouseResult?.categories?.performance?.score ?? 0) * 100);
+    if (!d.lighthouseResult) throw new Error();
+    const color = score >= 90 ? "var(--pass)" : score >= 50 ? "var(--warn)" : "var(--fail)";
+    const verdict = score >= 90 ? "fast" : score >= 50 ? "needs improvement" : "slow";
+    el.innerHTML = `<strong>Google mobile speed score:</strong><span class="score-pill" style="background:${color}">${score}/100</span> — Google rates this page as <strong>${verdict}</strong> on mobile. Speed directly affects ranking and whether visitors stay.`;
+  } catch {
+    el.textContent = "Couldn't get a Google speed score for this page (Google's tool sometimes declines a scan — try again later).";
+  }
+}
+
+function escapeHtml(s){ return String(s||"").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+
+btn.addEventListener("click", runAudit);
+input.addEventListener("keydown", e => { if (e.key === "Enter") runAudit(); });
+$("again").addEventListener("click", () => { report.style.display="none"; input.value=""; input.focus(); window.scrollTo({top:0,behavior:"smooth"}); });
+</script>
+</body>
+</html>
