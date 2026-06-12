@@ -204,21 +204,32 @@ exports.handler = async (event) => {
     canonical ? `Canonical set to ${canonical}` : "No canonical tag found.",
     canonical ? null : "Add a canonical tag so Google knows the preferred version of each page.", 4);
 
-  // robots.txt + sitemap (parallel)
-  const [robotsOk, sitemapOk] = await Promise.all(
-    ["/robots.txt", "/sitemap.xml"].map(async (p) => {
-      try {
-        const r = await fetchWithTimeout(origin + p, { timeout: 6000 });
-        return r.ok;
-      } catch { return false; }
-    })
-  );
+  // robots.txt + sitemap — check robots.txt first (it may declare the sitemap location, like Google does)
+  let robotsOk = false, robotsBody = "";
+  try {
+    const r = await fetchWithTimeout(origin + "/robots.txt", { timeout: 6000 });
+    robotsOk = r.ok;
+    if (r.ok) robotsBody = await r.text();
+  } catch { /* unreachable */ }
+
+  let sitemapOk = false, sitemapLoc = null;
+  const declared = robotsBody.match(/^\s*sitemap:\s*(\S+)/im);
+  const candidates = [];
+  if (declared) candidates.push(declared[1]);
+  candidates.push(origin + "/sitemap.xml", origin + "/sitemap_index.xml", origin + "/sitemap-index.xml", origin + "/wp-sitemap.xml");
+  for (const loc of candidates) {
+    try {
+      const r = await fetchWithTimeout(loc, { timeout: 6000 });
+      if (r.ok) { sitemapOk = true; sitemapLoc = loc; break; }
+    } catch { /* try next */ }
+  }
+
   add("robots", "Technical", "robots.txt", robotsOk ? "pass" : "warn",
     robotsOk ? "robots.txt found." : "No robots.txt found.",
     robotsOk ? null : "Add a robots.txt file so crawlers know what to index.", 3);
   add("sitemap", "Technical", "XML sitemap", sitemapOk ? "pass" : "warn",
-    sitemapOk ? "sitemap.xml found." : "No sitemap.xml found at the standard location.",
-    sitemapOk ? null : "Add an XML sitemap and submit it in Google Search Console.", 4);
+    sitemapOk ? `Sitemap found at ${sitemapLoc}` : "No XML sitemap found (checked robots.txt and common locations).",
+    sitemapOk ? null : "Add an XML sitemap, declare it in robots.txt, and submit it in Google Search Console.", 4);
 
   const sizeKb = Math.round(Buffer.byteLength(html, "utf8") / 1024);
   add("size", "Technical", "Page weight (HTML)", sizeKb < 300 ? "pass" : "warn",
@@ -229,6 +240,52 @@ exports.handler = async (event) => {
   add("noindex", "Technical", "Indexability", noindex ? "fail" : "pass",
     noindex ? "Page has a NOINDEX tag — Google is told to ignore it!" : "Page is indexable.",
     noindex ? "Remove the noindex directive unless this page is intentionally hidden." : null, 10);
+
+  // Compression (from response headers)
+  const enc = (res.headers.get("content-encoding") || "").toLowerCase();
+  const compressed = /gzip|br|deflate|zstd/.test(enc);
+  add("compress", "Technical", "Text compression", compressed ? "pass" : "warn",
+    compressed ? `Compression enabled (${enc}).` : "Page is served uncompressed.",
+    compressed ? null : "Enable gzip or Brotli compression on the server — pages load noticeably faster.", 3);
+
+  // Caching header
+  const cache = res.headers.get("cache-control") || "";
+  add("cache", "Technical", "Browser caching", cache ? "pass" : "warn",
+    cache ? `Cache-Control set: ${cache.slice(0, 60)}` : "No Cache-Control header on the page.",
+    cache ? null : "Set caching headers so repeat visitors load the site faster.", 2);
+
+  // Mixed content (http resources on an https page)
+  if (https) {
+    const mixed = (html.match(/(?:src|href)\s*=\s*["']http:\/\//gi) || []).length;
+    add("mixed", "Technical", "Mixed content", mixed === 0 ? "pass" : "fail",
+      mixed === 0 ? "No insecure (http://) resources loaded on this secure page." : `${mixed} insecure http:// resources referenced on an https page.`,
+      mixed === 0 ? null : "Load all scripts, styles, and images over https:// — browsers block or flag mixed content.", 5);
+  }
+
+  // Structured data
+  const hasLdJson = /<script[^>]+type\s*=\s*["']application\/ld\+json["']/i.test(html);
+  add("schema", "Technical", "Structured data", hasLdJson ? "pass" : "warn",
+    hasLdJson ? "Schema.org structured data found." : "No structured data (schema.org) found.",
+    hasLdJson ? null : "Add LocalBusiness structured data — it powers rich results like hours, reviews, and location in Google.", 4);
+
+  // Twitter card
+  const twCard = getMetaContent(html, "twitter:card");
+  add("twitter", "Social", "Twitter/X card", twCard ? "pass" : "warn",
+    twCard ? `Twitter card set (${twCard}).` : "No Twitter/X card tags.",
+    twCard ? null : "Add twitter:card meta tags so links look right when shared on X.", 2);
+
+  // Deprecated HTML
+  const deprecated = html.match(/<(font|center|marquee|blink)[\s>]/gi) || [];
+  add("deprecated", "Technical", "Outdated HTML", deprecated.length === 0 ? "pass" : "warn",
+    deprecated.length === 0 ? "No deprecated HTML tags." : `${deprecated.length} deprecated tags found (e.g. ${deprecated[0].replace(/[<>\s]/g,"")}) — a sign of a very old site.`,
+    deprecated.length === 0 ? null : "Rebuild with modern HTML/CSS — deprecated tags signal an outdated site to both users and Google.", 2);
+
+  // Render-blocking scripts in <head>
+  const headHtml = (html.match(/<head[\s\S]*?<\/head>/i) || [""])[0];
+  const blockingScripts = (headHtml.match(/<script[^>]+src=/gi) || []).filter(s => !/async|defer|type\s*=\s*["']module["']/i.test(s)).length;
+  add("blocking", "Technical", "Render-blocking scripts", blockingScripts <= 2 ? "pass" : "warn",
+    `${blockingScripts} render-blocking scripts in the page head.`,
+    blockingScripts <= 2 ? null : "Add defer/async to script tags — blocking scripts delay how fast the page appears.", 3);
 
   // ---------- SCORE ----------
   let earned = 0, possible = 0;

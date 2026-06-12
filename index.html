@@ -126,6 +126,19 @@
   .check .fix b{font-weight:700}
 
   .speedwrap{padding:0 28px 28px}
+  .gtitle{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);padding:26px 0 14px}
+  .gsub{text-transform:none;letter-spacing:0;font-weight:400;font-size:11px}
+  .rings{display:flex;gap:10px;flex-wrap:wrap}
+  .ring{
+    flex:1;min-width:110px;border:1px solid var(--line);padding:14px 10px;text-align:center;
+  }
+  .ring .rs{font-weight:800;font-size:30px;line-height:1}
+  .ring .rl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-top:6px}
+  .gissue{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .gissue:last-child{border-bottom:none}
+  .gissue .gs{font-family:'IBM Plex Mono',monospace;flex-shrink:0;font-weight:600;width:34px}
+  .gissue .gc{color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;display:block}
+  .gissues-h{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);padding:20px 0 6px}
   .speed{
     margin-top:22px;border:1px dashed var(--line);padding:16px 18px;
     font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);
@@ -198,7 +211,10 @@
     <div class="summary-strip" id="summary"></div>
     <div id="cats"></div>
     <div class="speedwrap">
-      <div class="speed" id="speed">Checking Google mobile speed score… (can take up to 30 seconds)</div>
+      <h2 class="gtitle">Google Core Scores <span class="mono gsub">(Lighthouse mobile — same engine as PageSpeed Insights)</span></h2>
+      <div class="rings" id="rings"></div>
+      <div class="speed" id="speed">Running Google's full analysis… (can take up to 40 seconds)</div>
+      <div id="gissues"></div>
     </div>
   </div>
   <div class="actions">
@@ -242,6 +258,7 @@ async function runAudit() {
 }
 
 function render(data) {
+  structuralScore = data.score;
   $("r-url").textContent = data.url;
   $("r-date").textContent = new Date(data.scannedAt).toLocaleDateString(undefined, { year:"numeric", month:"long", day:"numeric" });
   $("r-ms").textContent = data.responseMs;
@@ -283,19 +300,48 @@ function render(data) {
   report.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+let structuralScore = null;
+
 async function runPageSpeed(url) {
-  const el = $("speed");
-  el.textContent = "Checking Google mobile speed score… (can take up to 30 seconds)";
+  const el = $("speed"), rings = $("rings"), gi = $("gissues");
+  rings.innerHTML = ""; gi.innerHTML = "";
+  el.style.display = "block";
+  el.textContent = "Running Google's full analysis… (can take up to 40 seconds)";
   try {
-    const r = await fetch("https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=" + encodeURIComponent(url) + "&strategy=mobile&category=performance");
+    const r = await fetch("/.netlify/functions/pagespeed?url=" + encodeURIComponent(url));
     const d = await r.json();
-    const score = Math.round((d.lighthouseResult?.categories?.performance?.score ?? 0) * 100);
-    if (!d.lighthouseResult) throw new Error();
-    const color = score >= 90 ? "var(--pass)" : score >= 50 ? "var(--warn)" : "var(--fail)";
-    const verdict = score >= 90 ? "fast" : score >= 50 ? "needs improvement" : "slow";
-    el.innerHTML = `<strong>Google mobile speed score:</strong><span class="score-pill" style="background:${color}">${score}/100</span> — Google rates this page as <strong>${verdict}</strong> on mobile. Speed directly affects ranking and whether visitors stay.`;
-  } catch {
-    el.textContent = "Couldn't get a Google speed score for this page (Google's tool sometimes declines a scan — try again later).";
+    if (!r.ok || d.error) throw new Error(d.error || "failed");
+
+    el.style.display = "none";
+    const col = s => s >= 90 ? "var(--pass)" : s >= 50 ? "var(--warn)" : "var(--fail)";
+    const order = ["performance", "accessibility", "best-practices", "seo"];
+    let sum = 0, n = 0;
+    rings.innerHTML = order.filter(k => d.categories[k]).map(k => {
+      const c = d.categories[k]; sum += c.score; n++;
+      return `<div class="ring"><div class="rs" style="color:${col(c.score)}">${c.score}</div><div class="rl">${c.title}</div></div>`;
+    }).join("");
+
+    if (d.issues && d.issues.length) {
+      gi.innerHTML = `<div class="gissues-h">Top issues Google found</div>` + d.issues.map(i => `
+        <div class="gissue">
+          <span class="gs" style="color:${col(i.score)}">${i.score}</span>
+          <span>${escapeHtml(i.title)}${i.value ? " — " + escapeHtml(i.value) : ""}<span class="gc">${escapeHtml(i.category)}</span></span>
+        </div>`).join("");
+    }
+
+    // Blend: 50% structural checks + 50% Google core scores
+    if (n > 0 && structuralScore !== null) {
+      const googleAvg = sum / n;
+      const blended = Math.round(structuralScore * 0.5 + googleAvg * 0.5);
+      const grade = blended >= 90 ? "A" : blended >= 80 ? "B" : blended >= 65 ? "C" : blended >= 50 ? "D" : "F";
+      $("r-grade").textContent = grade;
+      $("r-score").textContent = blended;
+      const stamp = $("stamp");
+      stamp.classList.remove("animate"); void stamp.offsetWidth; stamp.classList.add("animate");
+    }
+  } catch (e) {
+    el.style.display = "block";
+    el.textContent = e.message === "failed" ? "Couldn't get Google's analysis for this page right now." : e.message;
   }
 }
 

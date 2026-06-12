@@ -32,3 +32,15 @@ Plus: Google PageSpeed mobile score (fetched directly by the browser).
 
 ## Rename it
 "SiteGrade" is a placeholder. Search-and-replace in index.html to rebrand.
+
+## v2 additions
+- 23 structural checks (added: compression, caching, mixed content, structured data, Twitter cards, deprecated HTML, render-blocking scripts)
+- New function `netlify/functions/pagespeed.js`: full 4-category Google Lighthouse scores (Performance, Accessibility, Best Practices, SEO) + "Top issues Google found" list
+- Final stamped grade = 50% structural checks + 50% Google core scores
+
+## IMPORTANT: Get a free Google API key
+The keyless PageSpeed quota is tiny and shared — it WILL run out.
+1. Go to https://developers.google.com/speed/docs/insights/v5/get-started and click "Get a Key" (free, 25,000 queries/day)
+2. In Netlify: Site configuration → Environment variables → Add variable
+   Key: PSI_KEY   Value: (your key)
+3. Redeploy. Done — the pagespeed function picks it up automatically.
