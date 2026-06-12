@@ -302,27 +302,52 @@ function render(data) {
 
 let structuralScore = null;
 
+// PASTE YOUR GOOGLE API KEY BETWEEN THE QUOTES BELOW.
+// Then restrict it: console.cloud.google.com → APIs & Services → Credentials →
+// your key → Application restrictions → Websites → add sitegrade.netlify.app/*
+const PSI_KEY = "PASTE_YOUR_KEY_HERE";
+
 async function runPageSpeed(url) {
   const el = $("speed"), rings = $("rings"), gi = $("gissues");
   rings.innerHTML = ""; gi.innerHTML = "";
   el.style.display = "block";
-  el.textContent = "Running Google's full analysis… (can take up to 40 seconds)";
+  el.textContent = "Running Google's full analysis… big sites can take up to a minute. Hang tight.";
   try {
-    const r = await fetch("/.netlify/functions/pagespeed?url=" + encodeURIComponent(url));
+    const key = PSI_KEY && PSI_KEY !== "AIzaSyAl2tET1BDFc6JNALCG_vGSVMfAzOk0inMS" ? "&key=" + PSI_KEY : "";
+    const api = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=" + encodeURIComponent(url) +
+      "&strategy=mobile&category=performance&category=accessibility&category=best-practices&category=seo" + key;
+    const r = await fetch(api);
     const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.error || "failed");
+    if (d.error) throw new Error(/quota/i.test(d.error.message || "") ?
+      "Google's analysis quota is used up — check the API key setup." :
+      "Google couldn't analyze this page right now.");
+    const lr = d.lighthouseResult;
+    if (!lr) throw new Error("Google couldn't analyze this page right now.");
 
     el.style.display = "none";
     const col = s => s >= 90 ? "var(--pass)" : s >= 50 ? "var(--warn)" : "var(--fail)";
     const order = ["performance", "accessibility", "best-practices", "seo"];
     let sum = 0, n = 0;
-    rings.innerHTML = order.filter(k => d.categories[k]).map(k => {
-      const c = d.categories[k]; sum += c.score; n++;
-      return `<div class="ring"><div class="rs" style="color:${col(c.score)}">${c.score}</div><div class="rl">${c.title}</div></div>`;
+    rings.innerHTML = order.filter(k => lr.categories[k]).map(k => {
+      const score = Math.round(lr.categories[k].score * 100);
+      sum += score; n++;
+      return `<div class="ring"><div class="rs" style="color:${col(score)}">${score}</div><div class="rl">${lr.categories[k].title}</div></div>`;
     }).join("");
 
-    if (d.issues && d.issues.length) {
-      gi.innerHTML = `<div class="gissues-h">Top issues Google found</div>` + d.issues.map(i => `
+    // Top failed audits — the specific problems Google found
+    const issues = [], seen = new Set();
+    for (const catKey of Object.keys(lr.categories)) {
+      for (const ref of lr.categories[catKey].auditRefs || []) {
+        const a = lr.audits[ref.id];
+        if (!a || a.score === null || a.score >= 0.9 || seen.has(ref.id)) continue;
+        if (a.scoreDisplayMode === "informative" || a.scoreDisplayMode === "notApplicable") continue;
+        seen.add(ref.id);
+        issues.push({ category: lr.categories[catKey].title, title: a.title, value: a.displayValue || null, score: Math.round(a.score * 100) });
+      }
+    }
+    issues.sort((a, b) => a.score - b.score);
+    if (issues.length) {
+      gi.innerHTML = `<div class="gissues-h">Top issues Google found</div>` + issues.slice(0, 12).map(i => `
         <div class="gissue">
           <span class="gs" style="color:${col(i.score)}">${i.score}</span>
           <span>${escapeHtml(i.title)}${i.value ? " — " + escapeHtml(i.value) : ""}<span class="gc">${escapeHtml(i.category)}</span></span>
@@ -331,8 +356,7 @@ async function runPageSpeed(url) {
 
     // Blend: 50% structural checks + 50% Google core scores
     if (n > 0 && structuralScore !== null) {
-      const googleAvg = sum / n;
-      const blended = Math.round(structuralScore * 0.5 + googleAvg * 0.5);
+      const blended = Math.round(structuralScore * 0.5 + (sum / n) * 0.5);
       const grade = blended >= 90 ? "A" : blended >= 80 ? "B" : blended >= 65 ? "C" : blended >= 50 ? "D" : "F";
       $("r-grade").textContent = grade;
       $("r-score").textContent = blended;
@@ -341,7 +365,7 @@ async function runPageSpeed(url) {
     }
   } catch (e) {
     el.style.display = "block";
-    el.textContent = e.message === "failed" ? "Couldn't get Google's analysis for this page right now." : e.message;
+    el.textContent = e.message || "Couldn't get Google's analysis for this page right now.";
   }
 }
 
