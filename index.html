@@ -305,7 +305,7 @@ let structuralScore = null;
 // PASTE YOUR GOOGLE API KEY BETWEEN THE QUOTES BELOW.
 // Then restrict it: console.cloud.google.com → APIs & Services → Credentials →
 // your key → Application restrictions → Websites → add sitegrade.netlify.app/*
-const PSI_KEY = "PASTE_YOUR_KEY_HERE";
+const PSI_KEY = "AIzaSyAl2tET1BDFc6JNALCG_vGSVMfAzOk0inM";
 
 async function runPageSpeed(url) {
   const el = $("speed"), rings = $("rings"), gi = $("gissues");
@@ -313,7 +313,7 @@ async function runPageSpeed(url) {
   el.style.display = "block";
   el.textContent = "Running Google's full analysis… big sites can take up to a minute. Hang tight.";
   try {
-    const key = PSI_KEY && PSI_KEY !== "PASTE_YOUR_KEY_HERE" ? "&key=" + PSI_KEY : "";
+    const key = PSI_KEY && PSI_KEY !== "AIzaSyAl2tET1BDFc6JNALCG_vGSVMfAzOk0inM" ? "&key=" + PSI_KEY : "";
     const api = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=" + encodeURIComponent(url) +
       "&strategy=mobile&category=performance&category=accessibility&category=best-practices&category=seo" + key;
     const r = await fetch(api);
